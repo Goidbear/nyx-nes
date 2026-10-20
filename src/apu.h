@@ -14,7 +14,7 @@ public:
 private:
     int cpuFreq = 1789773;
     static constexpr int SAMPLE_RATE = 44100;
-    static constexpr int RING_SIZE = 8192;
+    static constexpr int RING_SIZE = 32768;
 
     int16_t ring[RING_SIZE] = {};
     int ringHead = 0;

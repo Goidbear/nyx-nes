@@ -244,8 +244,8 @@ void APU::clock() {
 
         // Low-pass: removes aliasing from sample-rate output
         // (2nd-order, cutoff around 6 kHz — smooths high harmonics)
-        lpf1 = lpf1 + 0.30f * (hpfOut - lpf1);
-        lpf2 = lpf2 + 0.30f * (lpf1 - lpf2);
+        lpf1 = lpf1 + 0.90f * (hpfOut - lpf1);
+        lpf2 = lpf2 + 0.90f * (lpf1 - lpf2);
 
         int16_t s = (int16_t)(lpf2 * 18000.0f);
         ring[ringHead] = s;

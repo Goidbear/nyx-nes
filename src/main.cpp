@@ -292,6 +292,8 @@ static const ImVec4 COL_ACCENT(0.42f, 0.78f, 0.42f, 1.0f);
 static const ImVec4 COL_DIM(0.5f, 0.5f, 0.55f, 1.0f);
 static const ImVec4 COL_ERROR(0.9f, 0.4f, 0.4f, 1.0f);
 
+static bool g_turboLock = false;
+
 int main(int argc, char** argv) {
     std::string romPath = (argc >= 2) ? argv[1] : "";
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER);
@@ -477,7 +479,9 @@ int main(int argc, char** argv) {
         }
 
         if (bus && !paused && !showLibrary) {
-            for (int i = 0; i < cyclesPerFrame; i++) bus->clock();
+            bool turbo = g_turboLock || SDL_GetKeyboardState(NULL)[SDL_SCANCODE_TAB] != 0;
+            int cycles = turbo ? cyclesPerFrame * 4 : cyclesPerFrame;
+            for (int i = 0; i < cycles; i++) bus->clock();
             if (audioDev) {
                 Uint32 queued = SDL_GetQueuedAudioSize(audioDev);
                 int room = 16384 - (int)(queued / sizeof(int16_t));
@@ -552,6 +556,10 @@ int main(int argc, char** argv) {
                 if (ImGui::MenuItem(paused ? "Resume" : "Pause", "Space", false, bus != nullptr && !showLibrary)) paused = !paused;
                 if (ImGui::MenuItem("Reset", "F2", false, bus != nullptr)) {
                     if (cart) { bus = std::make_unique<Bus>(); bus->insertCartridge(cart); bus->cpu->Reset(); }
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Fast Forward (4x)", "TAB", g_turboLock)) {
+                    g_turboLock = !g_turboLock;
                 }
                 ImGui::EndMenu();
             }
@@ -755,6 +763,22 @@ int main(int argc, char** argv) {
             }
             ImGui::EndChild();
 
+            // Keyboard navigation in library
+            if (showLibrary && !g_extracting) {
+                if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+                    if (g_selectedIdx < 0) g_selectedIdx = 0;
+                    else if (g_selectedIdx < (int)g_library.size() - 1) g_selectedIdx++;
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+                    if (g_selectedIdx > 0) g_selectedIdx--;
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_Enter) && g_selectedIdx >= 0
+                    && g_selectedIdx < (int)g_library.size()
+                    && !g_library[g_selectedIdx].missing) {
+                    loadRom(g_library[g_selectedIdx].path);
+                }
+            }
+
             ImGui::Separator();
             if (g_selectedIdx >= 0 && g_selectedIdx < (int)g_library.size()) {
                 RomEntry& sel = g_library[g_selectedIdx];
@@ -912,6 +936,16 @@ int main(int argc, char** argv) {
             while (SDL_GetPerformanceCounter() - lastFrame < targetTicks) {}
         }
         lastFrame = SDL_GetPerformanceCounter();
+
+        static Uint32 autoSaveTimer = 0;
+        if (bus && !paused && !showLibrary && !romBasePath.empty()) {
+            if (autoSaveTimer == 0) autoSaveTimer = SDL_GetTicks();
+            else if (SDL_GetTicks() - autoSaveTimer > 60000) {
+                FileWriter w((romBasePath + ".state0").c_str());
+                if (w.ok()) bus->serialize(w);
+                autoSaveTimer = SDL_GetTicks();
+            }
+        }
 
         fpsFrames++;
         if (SDL_GetPerformanceCounter() - fpsTimer >= perfFreq) {
