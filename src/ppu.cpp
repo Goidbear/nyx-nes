@@ -247,12 +247,12 @@ void PPU::clock() {
                 spriteCount = 0;
             }
         }
-        // MMC3 IRQ: A12 rising edge.
-        //   A12 goes high during SPRITE fetch if sprite pattern = $1000 (PPUCTRL bit 3)
-        //   A12 goes high during BG    fetch if BG     pattern = $1000 (PPUCTRL bit 4)
+        // MMC3 IRQ: A12 rising edge. Fires at the exact hardware cycle.
+        // If sprite pattern table is $1000 (PPUCTRL bit 3), A12 rises at cycle 260 (sprite fetch).
+        // If BG pattern table is $1000 (PPUCTRL bit 4), A12 rises at cycle 324 (BG fetch).
         if (cart) {
-            if (cycle == 257 && (ppu_ctrl & 0x08)) cart->clockIRQCounter();
-            if (cycle == 321 && (ppu_ctrl & 0x10)) cart->clockIRQCounter();
+            if (cycle == 260 && (ppu_ctrl & 0x08)) cart->clockIRQCounter();
+            if (cycle == 324 && (ppu_ctrl & 0x10)) cart->clockIRQCounter();
         }
         if (cycle == 338 || cycle == 340) ntByte = ppuRead(0x2000 | (v_reg & 0x0FFF));
         if ((ppu_mask & 0x18) && scanline == -1 && cycle >= 280 && cycle < 305) {
@@ -283,7 +283,8 @@ void PPU::renderPixel() {
 
     Byte bg = 0; Byte pal = 0;
 
-    if (ppu_mask & 0x08) {
+    bool bgLeftOK = (x >= 8) || (ppu_mask & 0x02);
+    if ((ppu_mask & 0x08) && bgLeftOK) {
         Word bit_mux = 0x8000 >> fine_x;
         Byte p0 = (bgShiftPatLo & bit_mux) ? 1 : 0;
         Byte p1 = (bgShiftPatHi & bit_mux) ? 1 : 0;
@@ -294,7 +295,8 @@ void PPU::renderPixel() {
     }
 
     Byte spr = 0; Byte sprPal = 0; bool sprPriority = false;
-    if (ppu_mask & 0x10) {
+    bool sprLeftOK = (x >= 8) || (ppu_mask & 0x04);
+    if ((ppu_mask & 0x10) && sprLeftOK) {
         for (int i = 0; i < spriteCount; i++) {
             int diff = x - spriteBuf[i].x;
             if (diff < 0 || diff > 7) continue;
